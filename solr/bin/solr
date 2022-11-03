@@ -878,10 +878,10 @@ function stop_solr() {
   if [[ "${STAT:-Z}" != "Z" ]]; then
     if [ -n "{$JSTACK:-}" ]; then
       echo -e "Solr process $SOLR_PID is still running; jstacking it now."
-      $JSTACK $SOLR_PID > $SOLR_PID_DIR/solr-threaddump.txt
+      $JSTACK $SOLR_PID > $SOLR_PID_DIR/solr-threaddump-$SOLR_PID..txt
     elif [ "$JATTACH" != "" ]; then
       echo -e "Solr process $SOLR_PID is still running; jattach threaddumping it now."
-      $JATTACH $SOLR_PID threaddump > $SOLR_PID_DIR/solr-threaddump.txt
+      $JATTACH $SOLR_PID threaddump > $SOLR_PID_DIR/solr-threaddump-$SOLR_PID.txt
     fi
     echo -e "Solr process $SOLR_PID is still running; forcefully killing it now."
     kill -9 $SOLR_PID
