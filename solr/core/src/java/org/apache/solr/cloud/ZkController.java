@@ -2929,7 +2929,7 @@ public class ZkController implements Closeable {
             collectionsInThisNode.add(cd.getCloudDescriptor().getCollectionName());
           }
         }
-        collectionsInThisNode.parallelStream()
+        collectionsInThisNode
             .forEach(
                 c -> {
                   final List<String> replicasToDown = new ArrayList<>();
