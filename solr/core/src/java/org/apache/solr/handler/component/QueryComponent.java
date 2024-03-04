@@ -116,6 +116,7 @@ import org.apache.solr.search.grouping.endresulttransformer.GroupedEndResultTran
 import org.apache.solr.search.grouping.endresulttransformer.MainEndResultTransformer;
 import org.apache.solr.search.grouping.endresulttransformer.SimpleEndResultTransformer;
 import org.apache.solr.search.stats.StatsCache;
+import org.apache.solr.search.stats.LocalStatsCache;
 import org.apache.solr.util.SolrPluginUtils;
 import org.apache.solr.util.SolrResponseUtil;
 import org.slf4j.Logger;
@@ -169,7 +170,8 @@ public class QueryComponent extends SearchComponent {
     }
 
     // set the flag for distributed stats
-    rb.setEnableDistribStats(params.getBool(CommonParams.DISTRIB_STATS_CACHE, true));
+    rb.setDisableDistribStats(!params.getBool(CommonParams.DISTRIB_STATS_CACHE, true));
+    rb.setDistribStatsExplicitEnabled(params.getBool(CommonParams.DISTRIB_STATS_CACHE, false));
 
     try {
       QParser parser = QParser.getParser(rb.getQueryString(), defType, req);
@@ -368,7 +370,7 @@ public class QueryComponent extends SearchComponent {
     QueryCommand cmd = rb.createQueryCommand();
     cmd.setTimeAllowed(timeAllowed);
     cmd.setMinExactCount(getMinExactCount(params));
-    cmd.setEnableDistribStats(rb.isEnableDistribStats());
+    cmd.setDisableDistribStats(rb.isDistribStatsDisabled());
 
     boolean isCancellableQuery = params.getBool(CommonParams.IS_QUERY_CANCELLABLE, false);
 
@@ -740,7 +742,13 @@ public class QueryComponent extends SearchComponent {
 
   protected void createDistributedStats(ResponseBuilder rb) {
     StatsCache cache = rb.req.getSearcher().getStatsCache();
-    if (rb.isEnableDistribStats()
+    if (cache instanceof LocalStatsCache && rb.isDistribStatsExplicitEnabled()) {
+        throw new SolrException(
+            SolrException.ErrorCode.BAD_REQUEST,
+            "Explicitly set distrib.statsCache=true is not supported with LocalStatsCache configuration");
+    }
+
+    if (!rb.isDistribStatsDisabled()
         && ((rb.getFieldFlags() & SolrIndexSearcher.GET_SCORES) != 0
             || rb.getSortSpec().includesScore())) {
       ShardRequest sreq = cache.retrieveStatsRequest(rb);
