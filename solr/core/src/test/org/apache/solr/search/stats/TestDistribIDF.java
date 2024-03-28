@@ -310,7 +310,7 @@ public class TestDistribIDF extends SolrTestCaseJ4 {
 
     // distributed stats explicitly enabled
     query.set(CommonParams.DISTRIB_STATS_CACHE, "true");
-    query.set(CommonParams.Q, "cat:electronics");
+    query.set(CommonParams.Q, "name:ipad");
     rsp = client.query(COLLECTION, query);
     track = (NamedList<Object>) rsp.getDebugMap().get("track");
     assertNotNull(track);
