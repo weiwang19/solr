@@ -64,6 +64,8 @@ public class SolrIndexConfig implements MapSerializable {
 
   public final boolean useCompoundFile;
 
+  public final boolean sortLatestSegmentFirst;
+
   public final int maxBufferedDocs;
 
   public final double ramBufferSizeMB;
@@ -97,6 +99,7 @@ public class SolrIndexConfig implements MapSerializable {
   /** Internal constructor for setting defaults based on Lucene Version */
   private SolrIndexConfig() {
     useCompoundFile = false;
+    sortLatestSegmentFirst = false;
     maxBufferedDocs = -1;
     ramBufferSizeMB = 100;
     ramPerThreadHardLimitMB = -1;
@@ -149,6 +152,7 @@ public class SolrIndexConfig implements MapSerializable {
         true);
 
     useCompoundFile = get("useCompoundFile").boolVal(def.useCompoundFile);
+    sortLatestSegmentFirst = get("scanLatestSegmentFirst").boolVal(def.sortLatestSegmentFirst);
     maxBufferedDocs = get("maxBufferedDocs").intVal(def.maxBufferedDocs);
     ramBufferSizeMB = get("ramBufferSizeMB").doubleVal(def.ramBufferSizeMB);
     maxCommitMergeWaitMillis = get("maxCommitMergeWaitTime").intVal(def.maxCommitMergeWaitMillis);

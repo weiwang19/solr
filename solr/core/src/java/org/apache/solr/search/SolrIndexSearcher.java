@@ -39,18 +39,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.ExitableDirectoryReader;
-import org.apache.lucene.index.FieldInfos;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.LeafReader;
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.MultiPostingsEnum;
-import org.apache.lucene.index.PostingsEnum;
-import org.apache.lucene.index.StoredFieldVisitor;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.index.Terms;
-import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.index.*;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.CollectionStatistics;
@@ -204,7 +193,10 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
     assert reader != null;
     reader = UninvertingReader.wrap(reader, core.getLatestSchema().getUninversionMapper());
     if (useExitableDirectoryReader) { // SOLR-16693 legacy; may be removed.  Probably inefficient.
-      reader = ExitableDirectoryReader.wrap(reader, QueryLimits.getCurrentLimits());
+      SolrRequestInfo requestInfo = SolrRequestInfo.getRequestInfo();
+      assert requestInfo != null;
+      QueryLimits limits = requestInfo.getLimits();
+      reader = ExitableDirectoryReader.wrap(reader, limits);
     }
     return reader;
   }
@@ -714,8 +706,10 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
   @Override
   protected void search(List<LeafReaderContext> leaves, Weight weight, Collector collector)
       throws IOException {
-    QueryLimits queryLimits = QueryLimits.getCurrentLimits();
-    if (useExitableDirectoryReader || !queryLimits.isLimitsEnabled()) {
+    SolrRequestInfo requestInfo = SolrRequestInfo.getRequestInfo();
+    if (useExitableDirectoryReader
+        || requestInfo == null
+        || !requestInfo.getLimits().isTimeoutEnabled()) {
       // no timeout.  Pass through to super class
       super.search(leaves, weight, collector);
     } else {
@@ -725,11 +719,11 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
       // So we need to make a new IndexSearcher instead of using "this".
       new IndexSearcher(reader) { // cheap, actually!
         void searchWithTimeout() throws IOException {
-          setTimeout(queryLimits); // Lucene's method name is less than ideal here...
+          setTimeout(requestInfo.getLimits()); // Lucene's method name is less than ideal here...
           super.search(leaves, weight, collector); // FYI protected access
           if (timedOut()) {
-            throw new QueryLimitsExceededException(
-                "Limits exceeded! (search): " + queryLimits.limitStatusMessage());
+            throw new LimitExceededFromScorerException(
+                "Limits exceeded! " + requestInfo.getLimits().limitStatusMessage());
           }
         }
       }.searchWithTimeout();
@@ -973,8 +967,8 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
     }
 
     DocSet answer;
-    QueryLimits queryLimits = QueryLimits.getCurrentLimits();
-    if (queryLimits.isLimitsEnabled()) {
+    SolrRequestInfo requestInfo = SolrRequestInfo.getRequestInfo();
+    if (requestInfo != null && requestInfo.getLimits().isTimeoutEnabled()) {
       // If there is a possibility of timeout for this query, then don't reserve a computation slot.
       // Further, we can't naively wait for an in progress computation to finish, because if we time
       // out before it does then we won't even have partial results to provide. We could possibly
@@ -2625,5 +2619,23 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable, SolrI
 
   public long getWarmupTime() {
     return warmupTime;
+  }
+
+  private static Comparator<LeafReader> newestSegmentSorter() {
+
+    Comparator<LeafReader> leafSorter =
+            Comparator.comparingLong(
+                    r -> {
+                      try {
+                        long time = Long.parseLong(((SegmentReader)r).getSegmentInfo().info.getDiagnostics().get("timestamp"));
+                        return time;
+                      } catch (
+                              @SuppressWarnings("unused")
+                              Exception e) {
+                      }
+                      return Long.MIN_VALUE;
+                    });
+
+    return leafSorter.reversed();
   }
 }
